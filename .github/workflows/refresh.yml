@@ -1,0 +1,33 @@
+name: Daily Digest Refresh
+
+on:
+  schedule:
+    - cron: '30 3 * * *'  # 9:00 AM IST
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests feedparser groq
+
+      - name: Run digest
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python digest.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add dashboard.html
+          git commit -m "Refresh $(date +'%Y-%m-%d %H:%M')" || echo "No changes"
+          git push
