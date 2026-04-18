@@ -17,7 +17,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests feedparser groq
+        run: pip install requests feedparser
 
       - name: Run digest
         env:
