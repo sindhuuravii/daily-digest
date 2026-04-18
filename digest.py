@@ -161,8 +161,9 @@ def fetch_headlines(feed_urls, limit=5):
 # AI SUMMARY VIA GROQ
 # ─────────────────────────────────────────
 def get_ai_summary(section_name, headlines):
+    print(f"DEBUG: GROQ_API_KEY starts with: {GROQ_API_KEY[:8] if GROQ_API_KEY else 'EMPTY'}")
     if not headlines or GROQ_API_KEY == "YOUR_GROQ_API_KEY_HERE":
-        return "Add your Groq API key to enable AI summaries. Get one free at https://console.groq.com"
+        return "Add your Groq API key..."
     try:
         headline_text = "\n".join([f"- {h['title']}" for h in headlines])
         prompt = (
