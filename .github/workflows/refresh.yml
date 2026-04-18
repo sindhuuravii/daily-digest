@@ -2,7 +2,7 @@ name: Daily Digest Refresh
 
 on:
   schedule:
-    - cron: '30 3 * * *'  # 9:00 AM IST
+    - cron: '30 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -22,9 +22,10 @@ jobs:
       - name: Run digest
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-       run: |
-          python digest.py
-          mv dashboard.html dashboard2.html
+        run: python digest.py
+
+      - name: Rename output
+        run: mv dashboard.html dashboard2.html
 
       - name: Commit and push
         run: |
