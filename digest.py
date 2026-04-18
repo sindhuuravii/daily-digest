@@ -17,7 +17,6 @@ import webbrowser
 import os
 import random
 from datetime import datetime
-from groq import Groq
 
 # ─────────────────────────────────────────
 # PASTE YOUR GROQ API KEY HERE
@@ -25,7 +24,6 @@ import os
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 # ─────────────────────────────────────────
 
-client = Groq(api_key=GROQ_API_KEY)
 
 # ─────────────────────────────────────────
 # FUN FACTS (rotating list)
@@ -162,28 +160,36 @@ def fetch_headlines(feed_urls, limit=5):
 # ─────────────────────────────────────────
 def get_ai_summary(section_name, headlines):
     print(f"DEBUG: GROQ_API_KEY starts with: {GROQ_API_KEY[:8] if GROQ_API_KEY else 'EMPTY'}")
-    if not headlines or GROQ_API_KEY == "YOUR_GROQ_API_KEY_HERE":
-        return "Add your Groq API key..."
+    if not headlines or not GROQ_API_KEY:
+        return "Add your Groq API key to enable AI summaries."
     try:
         headline_text = "\n".join([f"- {h['title']}" for h in headlines])
         prompt = (
             f"You are a sharp analyst briefing a senior executive. "
             f"Based on these headlines from the '{section_name}' section, "
-            f"write a 3–4 sentence analytical summary. "
+            f"write a 3-4 sentence analytical summary. "
             f"Be concise, smart, and focus on 'why it matters' — like a young MBA operator. "
-            f"Do NOT repeat the headlines. Just give the synthesis.\n\n"
-            f"Headlines:\n{headline_text}"
+            f"Do NOT repeat the headlines. Just give the synthesis.\n\nHeadlines:\n{headline_text}"
         )
-        chat = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
-            temperature=0.6,
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200,
+                "temperature": 0.6,
+            },
+            timeout=15,
         )
-        return chat.choices[0].message.content.strip()
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
     except Exception as e:
         print(f"  [warn] Groq summary failed for {section_name}: {e}")
-        return "Summary unavailable — check your Groq API key or network."
+        return "Summary unavailable."
 
 # ─────────────────────────────────────────
 # WEATHER (Open-Meteo — no API key needed)
