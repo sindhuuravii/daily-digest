@@ -174,7 +174,7 @@ def get_ai_summary(section_name, headlines):
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
                 "Content-Type": "application/json",
             },
             json={
