@@ -16,8 +16,7 @@ import json
 import webbrowser
 import os
 import random
-from datetime import datetime
-
+from datetime import datetime, timezone, timedelta
 # ─────────────────────────────────────────
 # PASTE YOUR GROQ API KEY HERE
 import os
@@ -702,7 +701,8 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
 def main():
     print("\n🗞  Sindhu's Daily Digest — Starting up...\n")
 
-    generated_at = datetime.now().strftime("%A, %d %B %Y · %I:%M %p")
+    IST = timezone(timedelta(hours=5, minutes=30))
+    generated_at = datetime.now(IST).strftime("%A, %d %B %Y · %I:%M %p")
     fun_fact = random.choice(FUN_FACTS)
 
     print("📈 Fetching market data...")
