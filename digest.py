@@ -46,6 +46,7 @@ FUN_FACTS = [
 # RSS FEEDS BY SECTION
 # ─────────────────────────────────────────
 FEEDS = {
+    # CORE NEWS
     "World Affairs": [
         "https://feeds.bbci.co.uk/news/world/rss.xml",
         "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
@@ -61,6 +62,43 @@ FEEDS = {
         "https://feeds.reuters.com/reuters/worldNews",
         "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
     ],
+
+    # LOCAL NEWS
+    "Bangalore News": [
+        "https://www.thehindu.com/news/cities/bangalore/feeder/default.rss",
+        "https://bangaloremirror.indiatimes.com/rssfeeds/20800/list.cms",
+        "https://indianexpress.com/section/cities/bangalore/feed/",
+    ],
+    "Karnataka News": [
+        "https://www.deccanherald.com/rss/state.rss",
+        "https://www.thehindu.com/news/national/karnataka/feeder/default.rss",
+        "https://indianexpress.com/section/cities/bangalore/feed/",
+    ],
+    "India Pulse": [
+        "https://feeds.feedburner.com/ndtvnews-sports",
+        "https://www.thehindu.com/entertainment/feeder/default.rss",
+        "https://indianexpress.com/section/entertainment/feed/",
+        "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml",
+    ],
+
+    # TECH
+    "Technology": [
+        "https://techcrunch.com/feed/",
+        "https://www.theverge.com/rss/index.xml",
+        "https://feeds.arstechnica.com/arstechnica/index",
+    ],
+    "Semiconductors": [
+        "https://www.anandtech.com/rss/",
+        "https://semianalysis.com/feed/",
+        "https://techcrunch.com/feed/",
+    ],
+    "Rambus & Chip Leaders": [
+        "https://www.anandtech.com/rss/",
+        "https://semianalysis.com/feed/",
+        "https://feeds.arstechnica.com/arstechnica/index",
+    ],
+
+    # BUSINESS & ECONOMY
     "Business & Economy": [
         "https://feeds.bbci.co.uk/news/business/rss.xml",
         "https://economictimes.indiatimes.com/rssfeedsdefault.cms",
@@ -76,31 +114,8 @@ FEEDS = {
         "https://www.investing.com/rss/news_25.rss",
         "https://feeds.reuters.com/reuters/businessNews",
     ],
-    "Macroeconomics": [
-        "https://feeds.feedburner.com/typepad/krugman",
-        "https://feeds.reuters.com/reuters/businessNews",
-        "https://www.economist.com/finance-and-economics/rss.xml",
-    ],
-    "Technology": [
-        "https://techcrunch.com/feed/",
-        "https://www.theverge.com/rss/index.xml",
-        "https://feeds.arstechnica.com/arstechnica/index",
-    ],
-    "AI & Machine Learning": [
-        "https://techcrunch.com/category/artificial-intelligence/feed/",
-        "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
-        "https://venturebeat.com/category/ai/feed/",
-    ],
-    "Semiconductors": [
-        "https://www.anandtech.com/rss/",
-        "https://semianalysis.com/feed/",
-        "https://techcrunch.com/feed/",
-    ],
-    "Advertising & Campaigns": [
-        "https://www.adweek.com/feed/",
-        "https://feeds.feedburner.com/adage/digital",
-        "https://www.marketingweek.com/feed/",
-    ],
+
+    # MARKETING & CULTURE
     "Consumer Trends": [
         "https://www.adweek.com/feed/",
         "https://feeds.feedburner.com/adage/digital",
@@ -115,16 +130,6 @@ FEEDS = {
         "https://pitchfork.com/feed/feed-news/rss",
         "https://www.theguardian.com/culture/rss",
         "https://variety.com/feed/",
-    ],
-    "Bangalore News": [
-        "https://www.thehindu.com/news/cities/bangalore/feeder/default.rss",
-        "https://bangaloremirror.indiatimes.com/rssfeeds/20800/list.cms",
-        "https://indianexpress.com/section/cities/bangalore/feed/",
-    ],
-    "Karnataka News": [
-        "https://www.deccanherald.com/rss/state.rss",
-        "https://www.thehindu.com/news/national/karnataka/feeder/default.rss",
-        "https://indianexpress.com/section/cities/bangalore/feed/",
     ],
 }
 
@@ -157,12 +162,30 @@ def fetch_headlines(feed_urls, limit=5):
 def get_ai_summary(section_name, headlines):
     if not headlines or not GROQ_API_KEY:
         return "Add your Groq API key to enable AI summaries."
+
+    # Special prompt for Rambus & Chip Leaders section
+    if section_name == "Rambus & Chip Leaders":
+        extra = (
+            "Focus on memory interface chips, high-bandwidth memory, silicon IP, "
+            "and what companies like Rambus, Synopsys, Cadence, Arm, and TSMC are doing. "
+            "Frame it as what matters for someone working in this space. "
+        )
+    elif section_name == "India Pulse":
+        extra = (
+            "Pick the most interesting, conversation-worthy stories — cricket, Bollywood, "
+            "major cultural events, viral moments, or anything India is buzzing about. "
+            "Keep it light, sharp, and social. "
+        )
+    else:
+        extra = ""
+
     try:
         headline_text = "\n".join([f"- {h['title']}" for h in headlines])
         prompt = (
             f"You are a sharp analyst briefing a senior executive. "
             f"Based on these headlines from the '{section_name}' section, "
             f"write a 3-4 sentence analytical summary. "
+            f"{extra}"
             f"Be concise, smart, and focus on 'why it matters' — like a young MBA operator. "
             f"Do NOT repeat the headlines. Just give the synthesis.\n\nHeadlines:\n{headline_text}"
         )
@@ -187,7 +210,7 @@ def get_ai_summary(section_name, headlines):
         return "Summary unavailable."
 
 # ─────────────────────────────────────────
-# ON THIS DAY (Wikipedia API — real events for today's date)
+# ON THIS DAY (Wikipedia API)
 # ─────────────────────────────────────────
 def get_on_this_day():
     try:
@@ -215,45 +238,6 @@ def get_on_this_day():
         return ["Could not load today's historical events."]
 
 # ─────────────────────────────────────────
-# WELLNESS TIP (AI-generated daily via Groq)
-# ─────────────────────────────────────────
-def get_wellness_tip():
-    if not GROQ_API_KEY:
-        return ("💪 Wellness", "Add your Groq API key to enable daily wellness tips.")
-    try:
-        IST = timezone(timedelta(hours=5, minutes=30))
-        today = datetime.now(IST).strftime("%A, %d %B")
-        prompt = (
-            f"Today is {today}. Generate one daily wellness tip for a sharp, ambitious young professional in Bengaluru, India. "
-            f"It can be a workout tip, mental health insight, productivity hack, stoic quote with reflection, or recovery tip. "
-            f"Make it specific, actionable, and genuinely useful — not generic. "
-            f"Format your response as JSON with two fields: 'label' (an emoji + 2-3 word title) and 'tip' (2-3 sentences). "
-            f"Return only valid JSON, no markdown, no backticks."
-        )
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 150,
-                "temperature": 0.9,
-            },
-            timeout=15,
-        )
-        data = response.json()
-        text = data["choices"][0]["message"]["content"].strip()
-        text = text.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(text)
-        return (parsed["label"], parsed["tip"])
-    except Exception as e:
-        print(f"  [warn] Wellness tip failed: {e}")
-        return ("💪 Wellness", "Take a 10-minute walk today. Even brief movement resets your nervous system and sharpens focus for the rest of the day.")
-
-# ─────────────────────────────────────────
 # WEATHER (Open-Meteo — no API key needed)
 # ─────────────────────────────────────────
 def get_bangalore_weather():
@@ -270,43 +254,23 @@ def get_bangalore_weather():
             "https://api.open-meteo.com/v1/forecast"
             "?latitude=12.9716&longitude=77.5946"
             "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
-            "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max"
             "&timezone=Asia%2FKolkata"
-            "&forecast_days=7"
         )
         r = requests.get(url, timeout=8)
         data = r.json()
         current = data["current"]
-        daily = data["daily"]
-
         temp = current["temperature_2m"]
         humidity = current["relative_humidity_2m"]
         wind = current["wind_speed_10m"]
         code = current["weather_code"]
         emoji, desc = weather_map.get(code, ("🌡️", "Unknown"))
-
-        forecast = []
-        for i in range(7):
-            date_str = daily["time"][i]
-            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-            day_name = date_obj.strftime("%a %d %b")
-            max_t = daily["temperature_2m_max"][i]
-            min_t = daily["temperature_2m_min"][i]
-            d_code = daily["weather_code"][i]
-            rain_prob = daily["precipitation_probability_max"][i]
-            d_emoji, d_desc = weather_map.get(d_code, ("🌡️", "Unknown"))
-            forecast.append({
-                "day": day_name, "emoji": d_emoji, "desc": d_desc,
-                "max": max_t, "min": min_t, "rain": rain_prob,
-            })
-
         return {
             "temp": temp, "humidity": humidity, "wind": wind,
-            "desc": desc, "emoji": emoji, "forecast": forecast,
+            "desc": desc, "emoji": emoji,
         }
     except Exception as e:
         print(f"  [warn] Weather fetch failed: {e}")
-        return {"temp": "N/A", "humidity": "N/A", "wind": "N/A", "desc": "Unavailable", "emoji": "🌡️", "forecast": []}
+        return {"temp": "N/A", "humidity": "N/A", "wind": "N/A", "desc": "Unavailable", "emoji": "🌡️"}
 
 # ─────────────────────────────────────────
 # MARKETS (Yahoo Finance — no key needed)
@@ -344,7 +308,7 @@ def get_market_data():
 # ─────────────────────────────────────────
 # HTML GENERATION
 # ─────────────────────────────────────────
-def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_day, wellness):
+def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_day):
 
     def market_ticker_html(markets):
         items = []
@@ -408,29 +372,14 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
 
     w = weather
     ticker = market_ticker_html(markets)
-    wellness_label, wellness_text = wellness
-
-    # 7-day forecast HTML
-    forecast_html = ""
-    for day in w.get("forecast", []):
-        forecast_html += f"""
-        <div class="forecast-day">
-            <div class="forecast-name">{day['day']}</div>
-            <div class="forecast-emoji">{day['emoji']}</div>
-            <div class="forecast-desc">{day['desc']}</div>
-            <div class="forecast-temps"><strong>{day['max']}°</strong> / {day['min']}°</div>
-            <div class="forecast-rain">🌧 {day['rain']}%</div>
-        </div>
-        """
-
     on_this_day_html = "<br>".join(on_this_day)
 
     groups = [
         ("CORE NEWS", ["World Affairs", "India & Policy", "Geopolitics"]),
-        ("BUSINESS & ECONOMY", ["Business & Economy", "Indian Startups", "Global Markets", "Macroeconomics"]),
-        ("TECH", ["Technology", "AI & Machine Learning", "Semiconductors"]),
-        ("MARKETING & CULTURE", ["Advertising & Campaigns", "Consumer Trends", "Fashion", "Culture & Entertainment"]),
-        ("LOCAL", ["Bangalore News", "Karnataka News"]),
+        ("LOCAL", ["Bangalore News", "Karnataka News", "India Pulse"]),
+        ("TECH", ["Technology", "Semiconductors", "Rambus & Chip Leaders"]),
+        ("BUSINESS & ECONOMY", ["Business & Economy", "Indian Startups", "Global Markets"]),
+        ("MARKETING & CULTURE", ["Consumer Trends", "Fashion", "Culture & Entertainment"]),
     ]
 
     groups_html = ""
@@ -507,42 +456,25 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
     .masthead-eyebrow {{ font-size: 11px; font-weight: 600; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }}
     .masthead-title {{ font-family: 'Playfair Display', serif; font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 700; color: var(--cream); line-height: 1.1; margin-bottom: 8px; }}
     .masthead-title em {{ font-style: italic; color: var(--gold-light); }}
+    .masthead-subtitle {{ font-size: 13px; color: rgba(250,246,239,0.7); letter-spacing: 0.06em; font-weight: 300; margin-top: 6px; font-style: italic; }}
     .masthead-dateline {{ font-size: 13px; color: rgba(250,246,239,0.6); letter-spacing: 0.08em; font-weight: 300; margin-top: 10px; }}
 
     .weather-strip {{
         background: var(--burgundy-mid);
         color: var(--cream);
-        padding: 16px 48px;
+        padding: 12px 48px;
         display: flex;
-        flex-direction: column;
-        gap: 16px;
+        align-items: center;
+        gap: 28px;
         font-size: 13px;
         border-bottom: 1px solid rgba(201,168,76,0.25);
     }}
-    .weather-current {{ display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }}
     .weather-city {{ font-weight: 600; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); }}
     .weather-data {{ display: flex; align-items: center; gap: 20px; }}
     .weather-emoji {{ font-size: 20px; }}
     .weather-desc {{ color: rgba(250,246,239,0.9); }}
     .weather-stat {{ color: rgba(250,246,239,0.65); font-size: 12px; }}
     .weather-stat strong {{ color: var(--cream); }}
-
-    .forecast-strip {{ display: flex; gap: 10px; flex-wrap: wrap; }}
-    .forecast-day {{
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(201,168,76,0.2);
-        border-radius: 4px;
-        padding: 8px 12px;
-        text-align: center;
-        min-width: 86px;
-        font-size: 12px;
-        color: var(--cream);
-    }}
-    .forecast-name {{ font-weight: 600; font-size: 10px; margin-bottom: 4px; color: var(--gold); letter-spacing: 0.05em; }}
-    .forecast-emoji {{ font-size: 18px; margin: 4px 0; }}
-    .forecast-desc {{ font-size: 10px; color: rgba(250,246,239,0.65); margin-bottom: 4px; }}
-    .forecast-temps {{ font-size: 12px; color: var(--cream); }}
-    .forecast-rain {{ font-size: 10px; color: rgba(250,246,239,0.55); margin-top: 3px; }}
 
     .fact-strip {{
         background: var(--cream-dark);
@@ -591,30 +523,6 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
         margin-top: 2px;
     }}
     .onthisday-text {{ color: var(--text-mid); line-height: 1.9; }}
-
-    .wellness-strip {{
-        background: #f0f5ed;
-        border-bottom: 1px solid rgba(46,125,82,0.15);
-        padding: 12px 48px;
-        display: flex;
-        align-items: flex-start;
-        gap: 14px;
-        font-size: 13px;
-    }}
-    .wellness-label {{
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: #2E7D52;
-        background: rgba(46,125,82,0.1);
-        padding: 3px 8px;
-        border-radius: 2px;
-        white-space: nowrap;
-        flex-shrink: 0;
-        margin-top: 2px;
-    }}
-    .wellness-text {{ color: #1a3a2a; font-style: italic; line-height: 1.6; }}
 
     .main-content {{ max-width: 1320px; margin: 0 auto; padding: 40px 32px 80px; }}
 
@@ -675,11 +583,9 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
     @media (max-width: 768px) {{
         .masthead {{ padding: 28px 24px; }}
         .main-content {{ padding: 24px 16px; }}
-        .weather-strip, .fact-strip, .onthisday-strip, .wellness-strip {{ padding: 12px 20px; }}
+        .weather-strip, .fact-strip, .onthisday-strip {{ padding: 12px 20px; flex-wrap: wrap; }}
         .ticker-bar {{ padding: 10px 20px; }}
         .sections-grid {{ grid-template-columns: 1fr; }}
-        .forecast-strip {{ gap: 8px; }}
-        .forecast-day {{ min-width: 76px; }}
     }}
 </style>
 </head>
@@ -694,19 +600,17 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
 <div class="masthead">
     <div class="masthead-eyebrow">Your Personal Intelligence Briefing</div>
     <div class="masthead-title"><em>Sindhu's</em> Daily Digest</div>
+    <div class="masthead-subtitle">Clarity. Context. Curiosity.</div>
     <div class="masthead-dateline">{generated_at} &nbsp;·&nbsp; Bengaluru, India</div>
 </div>
 
 <div class="weather-strip">
-    <div class="weather-current">
-        <span class="weather-city">🌆 Bengaluru Weather</span>
-        <div class="weather-data">
-            <span class="weather-emoji">{w['emoji']}</span>
-            <span class="weather-desc">{w['desc']}</span>
-            <span class="weather-stat"><strong>{w['temp']}°C</strong> · Humidity <strong>{w['humidity']}%</strong> · Wind <strong>{w['wind']} km/h</strong></span>
-        </div>
+    <span class="weather-city">🌆 Bengaluru Weather</span>
+    <div class="weather-data">
+        <span class="weather-emoji">{w['emoji']}</span>
+        <span class="weather-desc">{w['desc']}</span>
+        <span class="weather-stat"><strong>{w['temp']}°C</strong> · Humidity <strong>{w['humidity']}%</strong> · Wind <strong>{w['wind']} km/h</strong></span>
     </div>
-    <div class="forecast-strip">{forecast_html}</div>
 </div>
 
 <div class="fact-strip">
@@ -717,11 +621,6 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
 <div class="onthisday-strip">
     <span class="onthisday-label">📅 On This Day</span>
     <span class="onthisday-text">{on_this_day_html}</span>
-</div>
-
-<div class="wellness-strip">
-    <span class="wellness-label">{wellness_label}</span>
-    <span class="wellness-text">{wellness_text}</span>
 </div>
 
 <div class="main-content">
@@ -752,14 +651,11 @@ def main():
     print("📈 Fetching market data...")
     markets = get_market_data()
 
-    print("🌤  Fetching Bangalore weather + 7-day forecast...")
+    print("🌤  Fetching Bangalore weather...")
     weather = get_bangalore_weather()
 
     print("📅 Fetching On This Day...")
     on_this_day = get_on_this_day()
-
-    print("🧘 Generating wellness tip...")
-    wellness = get_wellness_tip()
 
     print("\n📰 Fetching headlines & generating AI summaries...\n")
     sections_data = {}
@@ -770,7 +666,7 @@ def main():
         sections_data[section_name] = {"articles": articles, "summary": summary}
 
     print("\n🎨 Building HTML dashboard...")
-    html = build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_day, wellness)
+    html = build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_day)
 
     output_file = "dashboard.html"
     with open(output_file, "w", encoding="utf-8") as f:
