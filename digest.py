@@ -4,25 +4,22 @@ Sindhu's Daily Digest — digest.py
 A personal daily news dashboard generator.
 
 SETUP:
-1. pip install requests feedparser groq
-2. Paste your Groq API key below (get one free at https://console.groq.com)
-3. Run: python digest.py
-4. dashboard.html will open automatically in your browser
+1. pip install requests feedparser
+2. Add GROQ_API_KEY as a GitHub Secret
+3. Run via GitHub Actions or: python digest.py
 """
 
 import feedparser
 import requests
 import json
-import webbrowser
 import os
 import random
 from datetime import datetime, timezone, timedelta
-# ─────────────────────────────────────────
-# PASTE YOUR GROQ API KEY HERE
-import os
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-# ─────────────────────────────────────────
 
+# ─────────────────────────────────────────
+# GROQ API KEY (from GitHub Secrets)
+# ─────────────────────────────────────────
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 
 # ─────────────────────────────────────────
 # FUN FACTS (rotating list)
@@ -60,9 +57,9 @@ FEEDS = {
         "https://feeds.feedburner.com/ndtvnews-india-news",
     ],
     "Geopolitics": [
-        "https://feeds.bbci.co.uk/news/world/rss.xml",
-        "https://www.aljazeera.com/xml/rss/all.xml",
         "https://foreignpolicy.com/feed/",
+        "https://feeds.reuters.com/reuters/worldNews",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",
     ],
     "Business & Economy": [
         "https://feeds.bbci.co.uk/news/business/rss.xml",
@@ -158,7 +155,6 @@ def fetch_headlines(feed_urls, limit=5):
 # AI SUMMARY VIA GROQ
 # ─────────────────────────────────────────
 def get_ai_summary(section_name, headlines):
-    print(f"DEBUG: GROQ_API_KEY starts with: {GROQ_API_KEY[:8] if GROQ_API_KEY else 'EMPTY'}")
     if not headlines or not GROQ_API_KEY:
         return "Add your Groq API key to enable AI summaries."
     try:
@@ -191,41 +187,126 @@ def get_ai_summary(section_name, headlines):
         return "Summary unavailable."
 
 # ─────────────────────────────────────────
+# ON THIS DAY (Wikipedia API — real events for today's date)
+# ─────────────────────────────────────────
+def get_on_this_day():
+    try:
+        IST = timezone(timedelta(hours=5, minutes=30))
+        today = datetime.now(IST)
+        month = today.month
+        day = today.day
+        url = f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/{month}/{day}"
+        headers = {"User-Agent": "SindhuDailyDigest/1.0"}
+        r = requests.get(url, headers=headers, timeout=8)
+        data = r.json()
+        events = data.get("events", [])
+        if len(events) >= 3:
+            picks = [events[0], events[len(events) // 2], events[-1]]
+        else:
+            picks = events
+        result = []
+        for e in picks:
+            year = e.get("year", "")
+            text = e.get("text", "")
+            result.append(f"<strong>{year}:</strong> {text}")
+        return result
+    except Exception as e:
+        print(f"  [warn] On This Day fetch failed: {e}")
+        return ["Could not load today's historical events."]
+
+# ─────────────────────────────────────────
+# WELLNESS TIP (AI-generated daily via Groq)
+# ─────────────────────────────────────────
+def get_wellness_tip():
+    if not GROQ_API_KEY:
+        return ("💪 Wellness", "Add your Groq API key to enable daily wellness tips.")
+    try:
+        IST = timezone(timedelta(hours=5, minutes=30))
+        today = datetime.now(IST).strftime("%A, %d %B")
+        prompt = (
+            f"Today is {today}. Generate one daily wellness tip for a sharp, ambitious young professional in Bengaluru, India. "
+            f"It can be a workout tip, mental health insight, productivity hack, stoic quote with reflection, or recovery tip. "
+            f"Make it specific, actionable, and genuinely useful — not generic. "
+            f"Format your response as JSON with two fields: 'label' (an emoji + 2-3 word title) and 'tip' (2-3 sentences). "
+            f"Return only valid JSON, no markdown, no backticks."
+        )
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 150,
+                "temperature": 0.9,
+            },
+            timeout=15,
+        )
+        data = response.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(text)
+        return (parsed["label"], parsed["tip"])
+    except Exception as e:
+        print(f"  [warn] Wellness tip failed: {e}")
+        return ("💪 Wellness", "Take a 10-minute walk today. Even brief movement resets your nervous system and sharpens focus for the rest of the day.")
+
+# ─────────────────────────────────────────
 # WEATHER (Open-Meteo — no API key needed)
 # ─────────────────────────────────────────
 def get_bangalore_weather():
+    weather_map = {
+        0: ("☀️", "Clear sky"), 1: ("🌤️", "Mainly clear"), 2: ("⛅", "Partly cloudy"),
+        3: ("☁️", "Overcast"), 45: ("🌫️", "Foggy"), 48: ("🌫️", "Icy fog"),
+        51: ("🌦️", "Light drizzle"), 53: ("🌦️", "Drizzle"), 55: ("🌧️", "Heavy drizzle"),
+        61: ("🌧️", "Light rain"), 63: ("🌧️", "Rain"), 65: ("🌧️", "Heavy rain"),
+        80: ("🌦️", "Showers"), 81: ("🌧️", "Heavy showers"), 82: ("⛈️", "Violent showers"),
+        95: ("⛈️", "Thunderstorm"), 96: ("⛈️", "Thunderstorm + hail"),
+    }
     try:
         url = (
             "https://api.open-meteo.com/v1/forecast"
             "?latitude=12.9716&longitude=77.5946"
             "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
+            "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max"
             "&timezone=Asia%2FKolkata"
+            "&forecast_days=7"
         )
         r = requests.get(url, timeout=8)
         data = r.json()
         current = data["current"]
+        daily = data["daily"]
+
         temp = current["temperature_2m"]
         humidity = current["relative_humidity_2m"]
         wind = current["wind_speed_10m"]
         code = current["weather_code"]
-
-        # Map WMO weather codes to emoji + description
-        weather_map = {
-            0: ("☀️", "Clear sky"), 1: ("🌤️", "Mainly clear"), 2: ("⛅", "Partly cloudy"),
-            3: ("☁️", "Overcast"), 45: ("🌫️", "Foggy"), 48: ("🌫️", "Icy fog"),
-            51: ("🌦️", "Light drizzle"), 53: ("🌦️", "Drizzle"), 55: ("🌧️", "Heavy drizzle"),
-            61: ("🌧️", "Light rain"), 63: ("🌧️", "Rain"), 65: ("🌧️", "Heavy rain"),
-            80: ("🌦️", "Showers"), 81: ("🌧️", "Heavy showers"), 82: ("⛈️", "Violent showers"),
-            95: ("⛈️", "Thunderstorm"), 96: ("⛈️", "Thunderstorm + hail"),
-        }
         emoji, desc = weather_map.get(code, ("🌡️", "Unknown"))
+
+        forecast = []
+        for i in range(7):
+            date_str = daily["time"][i]
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+            day_name = date_obj.strftime("%a %d %b")
+            max_t = daily["temperature_2m_max"][i]
+            min_t = daily["temperature_2m_min"][i]
+            d_code = daily["weather_code"][i]
+            rain_prob = daily["precipitation_probability_max"][i]
+            d_emoji, d_desc = weather_map.get(d_code, ("🌡️", "Unknown"))
+            forecast.append({
+                "day": day_name, "emoji": d_emoji, "desc": d_desc,
+                "max": max_t, "min": min_t, "rain": rain_prob,
+            })
+
         return {
             "temp": temp, "humidity": humidity, "wind": wind,
-            "desc": desc, "emoji": emoji,
+            "desc": desc, "emoji": emoji, "forecast": forecast,
         }
     except Exception as e:
         print(f"  [warn] Weather fetch failed: {e}")
-        return {"temp": "N/A", "humidity": "N/A", "wind": "N/A", "desc": "Unavailable", "emoji": "🌡️"}
+        return {"temp": "N/A", "humidity": "N/A", "wind": "N/A", "desc": "Unavailable", "emoji": "🌡️", "forecast": []}
 
 # ─────────────────────────────────────────
 # MARKETS (Yahoo Finance — no key needed)
@@ -263,15 +344,14 @@ def get_market_data():
 # ─────────────────────────────────────────
 # HTML GENERATION
 # ─────────────────────────────────────────
-def build_html(sections_data, weather, markets, fun_fact, generated_at):
+def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_day, wellness):
 
     def market_ticker_html(markets):
         items = []
         for name, d in markets.items():
             price = d["price"]
             pct = d["pct"]
-            change = d["change"]
-            if isinstance(price, float) or isinstance(price, int):
+            if isinstance(price, (float, int)):
                 arrow = "▲" if pct >= 0 else "▼"
                 color_class = "up" if pct >= 0 else "down"
                 items.append(
@@ -300,7 +380,6 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
             )
         if not headlines_html:
             headlines_html = '<li class="headline-item no-data">No headlines available right now.</li>'
-
         return f"""
         <div class="section-card">
             <div class="section-header">
@@ -329,6 +408,22 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
 
     w = weather
     ticker = market_ticker_html(markets)
+    wellness_label, wellness_text = wellness
+
+    # 7-day forecast HTML
+    forecast_html = ""
+    for day in w.get("forecast", []):
+        forecast_html += f"""
+        <div class="forecast-day">
+            <div class="forecast-name">{day['day']}</div>
+            <div class="forecast-emoji">{day['emoji']}</div>
+            <div class="forecast-desc">{day['desc']}</div>
+            <div class="forecast-temps"><strong>{day['max']}°</strong> / {day['min']}°</div>
+            <div class="forecast-rain">🌧 {day['rain']}%</div>
+        </div>
+        """
+
+    on_this_day_html = "<br>".join(on_this_day)
 
     groups = [
         ("CORE NEWS", ["World Affairs", "India & Policy", "Geopolitics"]),
@@ -361,8 +456,6 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         --text-dark: #1A0A10;
         --text-mid: #4A2030;
         --text-light: #8A6070;
-        --up-green: #2E7D52;
-        --down-red: #C0392B;
         --card-bg: #FFFFFF;
         --border: rgba(92,26,43,0.15);
     }}
@@ -377,7 +470,6 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         line-height: 1.6;
     }}
 
-    /* TICKER BAR */
     .ticker-bar {{
         background: var(--burgundy-dark);
         color: var(--cream);
@@ -387,31 +479,16 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         gap: 32px;
         overflow-x: auto;
         white-space: nowrap;
-        font-family: 'Jost', sans-serif;
         font-size: 13px;
         letter-spacing: 0.04em;
     }}
-    .ticker-label {{
-        color: var(--gold);
-        font-weight: 600;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        flex-shrink: 0;
-    }}
-    .ticker-item {{
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 0 16px;
-        border-left: 1px solid rgba(201,168,76,0.3);
-    }}
+    .ticker-label {{ color: var(--gold); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; flex-shrink: 0; }}
+    .ticker-item {{ display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border-left: 1px solid rgba(201,168,76,0.3); }}
     .ticker-name {{ color: var(--cream-dark); font-weight: 500; }}
     .ticker-price {{ color: #fff; font-weight: 600; }}
     .ticker-change.up {{ color: #5DD68A; }}
     .ticker-change.down {{ color: #FF7A6E; }}
 
-    /* MASTHEAD */
     .masthead {{
         background: var(--burgundy);
         padding: 40px 48px 32px;
@@ -427,67 +504,52 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.12) 0%, transparent 70%);
         pointer-events: none;
     }}
-    .masthead-eyebrow {{
-        font-family: 'Jost', sans-serif;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.25em;
-        text-transform: uppercase;
-        color: var(--gold);
-        margin-bottom: 12px;
-    }}
-    .masthead-title {{
-        font-family: 'Playfair Display', serif;
-        font-size: clamp(2.4rem, 5vw, 4rem);
-        font-weight: 700;
-        color: var(--cream);
-        line-height: 1.1;
-        margin-bottom: 8px;
-        letter-spacing: -0.01em;
-    }}
-    .masthead-title em {{
-        font-style: italic;
-        color: var(--gold-light);
-    }}
-    .masthead-dateline {{
-        font-size: 13px;
-        color: rgba(250,246,239,0.6);
-        letter-spacing: 0.08em;
-        font-weight: 300;
-        margin-top: 10px;
-    }}
+    .masthead-eyebrow {{ font-size: 11px; font-weight: 600; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }}
+    .masthead-title {{ font-family: 'Playfair Display', serif; font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 700; color: var(--cream); line-height: 1.1; margin-bottom: 8px; }}
+    .masthead-title em {{ font-style: italic; color: var(--gold-light); }}
+    .masthead-dateline {{ font-size: 13px; color: rgba(250,246,239,0.6); letter-spacing: 0.08em; font-weight: 300; margin-top: 10px; }}
 
-    /* WEATHER STRIP */
     .weather-strip {{
         background: var(--burgundy-mid);
         color: var(--cream);
-        padding: 12px 48px;
+        padding: 16px 48px;
         display: flex;
-        align-items: center;
-        gap: 28px;
+        flex-direction: column;
+        gap: 16px;
         font-size: 13px;
         border-bottom: 1px solid rgba(201,168,76,0.25);
     }}
-    .weather-city {{
-        font-weight: 600;
-        font-size: 11px;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-        color: var(--gold);
-    }}
+    .weather-current {{ display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }}
+    .weather-city {{ font-weight: 600; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); }}
     .weather-data {{ display: flex; align-items: center; gap: 20px; }}
     .weather-emoji {{ font-size: 20px; }}
     .weather-desc {{ color: rgba(250,246,239,0.9); }}
     .weather-stat {{ color: rgba(250,246,239,0.65); font-size: 12px; }}
     .weather-stat strong {{ color: var(--cream); }}
 
-    /* FUN FACT STRIP */
+    .forecast-strip {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .forecast-day {{
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(201,168,76,0.2);
+        border-radius: 4px;
+        padding: 8px 12px;
+        text-align: center;
+        min-width: 86px;
+        font-size: 12px;
+        color: var(--cream);
+    }}
+    .forecast-name {{ font-weight: 600; font-size: 10px; margin-bottom: 4px; color: var(--gold); letter-spacing: 0.05em; }}
+    .forecast-emoji {{ font-size: 18px; margin: 4px 0; }}
+    .forecast-desc {{ font-size: 10px; color: rgba(250,246,239,0.65); margin-bottom: 4px; }}
+    .forecast-temps {{ font-size: 12px; color: var(--cream); }}
+    .forecast-rain {{ font-size: 10px; color: rgba(250,246,239,0.55); margin-top: 3px; }}
+
     .fact-strip {{
         background: var(--cream-dark);
         border-bottom: 1px solid var(--border);
         padding: 12px 48px;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 14px;
         font-size: 13px;
     }}
@@ -502,28 +564,63 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         border-radius: 2px;
         white-space: nowrap;
         flex-shrink: 0;
+        margin-top: 2px;
     }}
-    .fact-text {{ color: var(--text-mid); font-style: italic; }}
+    .fact-text {{ color: var(--text-mid); font-style: italic; line-height: 1.6; }}
 
-    /* MAIN CONTENT */
-    .main-content {{
-        max-width: 1320px;
-        margin: 0 auto;
-        padding: 40px 32px 80px;
-    }}
-
-    /* GROUP BLOCKS */
-    .group-block {{
-        margin-bottom: 56px;
-    }}
-    .group-label {{
+    .onthisday-strip {{
+        background: #f5ede0;
+        border-bottom: 1px solid var(--border);
+        padding: 12px 48px;
         display: flex;
-        align-items: center;
-        gap: 16px;
-        margin-bottom: 24px;
+        align-items: flex-start;
+        gap: 14px;
+        font-size: 13px;
     }}
+    .onthisday-label {{
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--burgundy);
+        background: rgba(92,26,43,0.1);
+        padding: 3px 8px;
+        border-radius: 2px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }}
+    .onthisday-text {{ color: var(--text-mid); line-height: 1.9; }}
+
+    .wellness-strip {{
+        background: #f0f5ed;
+        border-bottom: 1px solid rgba(46,125,82,0.15);
+        padding: 12px 48px;
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        font-size: 13px;
+    }}
+    .wellness-label {{
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #2E7D52;
+        background: rgba(46,125,82,0.1);
+        padding: 3px 8px;
+        border-radius: 2px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }}
+    .wellness-text {{ color: #1a3a2a; font-style: italic; line-height: 1.6; }}
+
+    .main-content {{ max-width: 1320px; margin: 0 auto; padding: 40px 32px 80px; }}
+
+    .group-block {{ margin-bottom: 56px; }}
+    .group-label {{ display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }}
     .group-label span {{
-        font-family: 'Jost', sans-serif;
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.28em;
@@ -533,14 +630,8 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         border-bottom: 2px solid var(--gold);
     }}
 
-    /* SECTION GRID */
-    .sections-grid {{
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 24px;
-    }}
+    .sections-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 24px; }}
 
-    /* SECTION CARDS */
     .section-card {{
         background: var(--card-bg);
         border: 1px solid var(--border);
@@ -548,24 +639,10 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         padding: 24px;
         transition: box-shadow 0.2s ease, transform 0.2s ease;
     }}
-    .section-card:hover {{
-        box-shadow: 0 8px 32px rgba(92,26,43,0.12);
-        transform: translateY(-2px);
-    }}
-    .section-header {{
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid var(--border);
-    }}
-    .section-title {{
-        font-family: 'Playfair Display', serif;
-        font-size: 1.15rem;
-        font-weight: 600;
-        color: var(--burgundy-dark);
-        line-height: 1.3;
-    }}
+    .section-card:hover {{ box-shadow: 0 8px 32px rgba(92,26,43,0.12); transform: translateY(-2px); }}
+    .section-header {{ margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }}
+    .section-title {{ font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 600; color: var(--burgundy-dark); line-height: 1.3; }}
 
-    /* AI SUMMARY */
     .ai-summary {{
         background: rgba(92,26,43,0.04);
         border-left: 3px solid var(--gold);
@@ -573,59 +650,17 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
         margin-bottom: 18px;
         border-radius: 0 2px 2px 0;
     }}
-    .ai-badge {{
-        display: inline-block;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        color: var(--gold);
-        border: 1px solid var(--gold);
-        padding: 2px 6px;
-        margin-bottom: 8px;
-    }}
-    .summary-text {{
-        font-size: 13px;
-        color: var(--text-mid);
-        line-height: 1.65;
-        font-weight: 400;
-    }}
+    .ai-badge {{ display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: var(--gold); border: 1px solid var(--gold); padding: 2px 6px; margin-bottom: 8px; }}
+    .summary-text {{ font-size: 13px; color: var(--text-mid); line-height: 1.65; }}
 
-    /* HEADLINES */
-    .headline-list {{
-        list-style: none;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }}
-    .headline-item {{
-        padding: 8px 0;
-        border-bottom: 1px dashed rgba(92,26,43,0.1);
-        font-size: 13.5px;
-        line-height: 1.5;
-    }}
+    .headline-list {{ list-style: none; display: flex; flex-direction: column; gap: 10px; }}
+    .headline-item {{ padding: 8px 0; border-bottom: 1px dashed rgba(92,26,43,0.1); font-size: 13.5px; line-height: 1.5; }}
     .headline-item:last-child {{ border-bottom: none; }}
-    .headline-link {{
-        color: var(--text-dark);
-        text-decoration: none;
-        font-weight: 400;
-        transition: color 0.15s ease;
-        display: block;
-    }}
-    .headline-link:hover {{
-        color: var(--burgundy);
-        text-decoration: underline;
-        text-decoration-color: var(--gold);
-        text-underline-offset: 3px;
-    }}
-    .headline-link::before {{
-        content: '→ ';
-        color: var(--gold);
-        font-size: 12px;
-        font-weight: 600;
-    }}
+    .headline-link {{ color: var(--text-dark); text-decoration: none; font-weight: 400; transition: color 0.15s ease; display: block; }}
+    .headline-link:hover {{ color: var(--burgundy); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }}
+    .headline-link::before {{ content: '→ '; color: var(--gold); font-size: 12px; font-weight: 600; }}
     .no-data {{ color: var(--text-light); font-style: italic; }}
 
-    /* FOOTER */
     .footer {{
         background: var(--burgundy-dark);
         color: rgba(250,246,239,0.45);
@@ -640,50 +675,59 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at):
     @media (max-width: 768px) {{
         .masthead {{ padding: 28px 24px; }}
         .main-content {{ padding: 24px 16px; }}
-        .weather-strip, .fact-strip {{ padding: 12px 20px; flex-wrap: wrap; }}
+        .weather-strip, .fact-strip, .onthisday-strip, .wellness-strip {{ padding: 12px 20px; }}
         .ticker-bar {{ padding: 10px 20px; }}
         .sections-grid {{ grid-template-columns: 1fr; }}
+        .forecast-strip {{ gap: 8px; }}
+        .forecast-day {{ min-width: 76px; }}
     }}
 </style>
 </head>
 <body>
 
-<!-- MARKET TICKER -->
 <div class="ticker-bar">
     <span class="ticker-label">Markets</span>
     {ticker}
     <span style="color:rgba(250,246,239,0.35);font-size:11px;margin-left:auto;flex-shrink:0;">Yahoo Finance · {generated_at}</span>
 </div>
 
-<!-- MASTHEAD -->
 <div class="masthead">
     <div class="masthead-eyebrow">Your Personal Intelligence Briefing</div>
     <div class="masthead-title"><em>Sindhu's</em> Daily Digest</div>
     <div class="masthead-dateline">{generated_at} &nbsp;·&nbsp; Bengaluru, India</div>
 </div>
 
-<!-- WEATHER STRIP -->
 <div class="weather-strip">
-    <span class="weather-city">🌆 Bengaluru Weather</span>
-    <div class="weather-data">
-        <span class="weather-emoji">{w['emoji']}</span>
-        <span class="weather-desc">{w['desc']}</span>
-        <span class="weather-stat"><strong>{w['temp']}°C</strong> · Humidity <strong>{w['humidity']}%</strong> · Wind <strong>{w['wind']} km/h</strong></span>
+    <div class="weather-current">
+        <span class="weather-city">🌆 Bengaluru Weather</span>
+        <div class="weather-data">
+            <span class="weather-emoji">{w['emoji']}</span>
+            <span class="weather-desc">{w['desc']}</span>
+            <span class="weather-stat"><strong>{w['temp']}°C</strong> · Humidity <strong>{w['humidity']}%</strong> · Wind <strong>{w['wind']} km/h</strong></span>
+        </div>
     </div>
+    <div class="forecast-strip">{forecast_html}</div>
 </div>
 
-<!-- FUN FACT STRIP -->
 <div class="fact-strip">
     <span class="fact-label">✦ Today's Fact</span>
     <span class="fact-text">{fun_fact}</span>
 </div>
 
-<!-- MAIN CONTENT -->
+<div class="onthisday-strip">
+    <span class="onthisday-label">📅 On This Day</span>
+    <span class="onthisday-text">{on_this_day_html}</span>
+</div>
+
+<div class="wellness-strip">
+    <span class="wellness-label">{wellness_label}</span>
+    <span class="wellness-text">{wellness_text}</span>
+</div>
+
 <div class="main-content">
     {groups_html}
 </div>
 
-<!-- FOOTER -->
 <div class="footer">
     Generated by <strong>Sindhu's Daily Digest</strong> · Powered by Groq AI, Open-Meteo & Yahoo Finance ·
     Sources: BBC, NYT, Al Jazeera, The Hindu, TechCrunch, The Verge, Adweek &amp; more ·
@@ -708,11 +752,16 @@ def main():
     print("📈 Fetching market data...")
     markets = get_market_data()
 
-    print("🌤  Fetching Bangalore weather...")
+    print("🌤  Fetching Bangalore weather + 7-day forecast...")
     weather = get_bangalore_weather()
 
-    print("\n📰 Fetching headlines & generating AI summaries...\n")
+    print("📅 Fetching On This Day...")
+    on_this_day = get_on_this_day()
 
+    print("🧘 Generating wellness tip...")
+    wellness = get_wellness_tip()
+
+    print("\n📰 Fetching headlines & generating AI summaries...\n")
     sections_data = {}
     for section_name, feed_urls in FEEDS.items():
         print(f"  → {section_name}...")
@@ -721,15 +770,13 @@ def main():
         sections_data[section_name] = {"articles": articles, "summary": summary}
 
     print("\n🎨 Building HTML dashboard...")
-    html = build_html(sections_data, weather, markets, fun_fact, generated_at)
+    html = build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_day, wellness)
 
     output_file = "dashboard.html"
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html)
 
     print(f"✅ Dashboard saved → {output_file}")
-    print("🌐 Opening in browser...\n")
-    # webbrowser.open(f"file:///{os.path.abspath(output_file)}")
     print("Done! Enjoy your digest, Sindhu ☕\n")
 
 
