@@ -598,9 +598,7 @@ def build_html(sections_data, weather, markets, fun_fact, generated_at, on_this_
 </div>
 
 <div class="masthead">
-    <div class="masthead-eyebrow">Your Personal Intelligence Briefing</div>
     <div class="masthead-title"><em>Sindhu's</em> Daily Digest</div>
-    <div class="masthead-subtitle">Clarity. Context. Curiosity.</div>
     <div class="masthead-dateline">{generated_at} &nbsp;·&nbsp; Bengaluru, India</div>
 </div>
 
